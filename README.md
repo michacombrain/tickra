@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tickra – Jira-Klon (lokaler Prototyp)
 
-## Getting Started
+Projektmanagement-Tool im Stil von Jira: Projekte, Sprints, Kanban-Board mit Drag & Drop, Tickets mit Kommentaren, Labels und Benutzerkonten.
 
-First, run the development server:
+## Starten
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx prisma migrate dev   # Datenbank anlegen (SQLite, prisma/dev.db)
+npx tsx prisma/seed.ts   # Demo-Daten einspielen
+npm run dev              # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Demo-Logins** (Passwort jeweils `demo1234`):
+- micha@firma.de · anna@firma.de · tom@firma.de
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Funktionen
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Login & Registrierung** – Auth.js (Credentials + bcrypt), alle Seiten geschützt
+- **Projekte** – mehrere Projekte mit Key (z.B. `WEB`), Mitgliedern und Labels
+- **Backlog & Sprints** – Tickets inline erstellen, in Sprints verschieben, Sprint starten/abschließen (offene Tickets wandern zurück ins Backlog)
+- **Kanban-Board** – 4 Spalten (To Do / In Arbeit / In Review / Fertig), Drag & Drop per @dnd-kit, Filter nach zugewiesener Person
+- **Ticket-Detail** – öffnet als Modal über dem Board (Intercepting Route) oder als eigene Seite; Titel, Beschreibung, Status, Priorität, Typ, Assignee und Labels editierbar; Kommentar-Thread
+- **Suche** – Topbar-Suche über Ticket-Titel und -Keys
 
-## Learn More
+## Tech-Stack
 
-To learn more about Next.js, take a look at the following resources:
+| Bereich | Technologie |
+|---|---|
+| Framework | Next.js 16 (App Router, Server Actions, TypeScript) |
+| Datenbank | SQLite über Prisma 7 (Driver-Adapter `better-sqlite3`) |
+| Auth | Auth.js v5 (JWT-Session) |
+| UI | Tailwind CSS 4 + shadcn/ui |
+| Drag & Drop | @dnd-kit |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Struktur
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+prisma/schema.prisma          Datenmodell (User, Project, Sprint, Issue, Comment, Label)
+prisma/seed.ts                Demo-Daten
+src/auth.ts                   Auth.js-Konfiguration
+src/lib/actions/              Server Actions (auth, projects, issues, sprints)
+src/lib/access.ts             Projekt-Zugriffsprüfung
+src/app/(auth)/               Login & Registrierung
+src/app/(app)/projects/       Projektübersicht, Board, Backlog, Settings, Ticket-Seiten
+src/components/board/         Kanban-Board (DnD)
+src/components/issue/         Ticket-Detail, Side-Panel, Kommentare
+```
 
-## Deploy on Vercel
+## Später erweitern
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Hosting + Mehrbenutzer-Betrieb: Prisma-Datasource auf Postgres umstellen, `AUTH_SECRET` neu setzen, deployen (z.B. Vercel + Neon). Echtzeit-Sync, Berichte/Burndown und Datei-Anhänge sind bewusst noch nicht enthalten.

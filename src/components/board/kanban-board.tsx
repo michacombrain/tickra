@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -35,10 +35,16 @@ export function KanbanBoard({
   const [activeIssue, setActiveIssue] = useState<BoardIssue | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const lastTargetStatus = useRef<IssueStatus | null>(null);
   const router = useRouter();
 
-  // Server-Refreshs (z.B. nach Ticket-Edit im Modal) übernehmen
-  useEffect(() => setIssues(initialIssues), [initialIssues]);
+  // Server-Refreshs (z.B. nach Ticket-Edit im Modal) übernehmen –
+  // aber nicht mitten in einem laufenden Drag, sonst bricht dnd-kit ab
+  const draggingRef = useRef(false);
+  draggingRef.current = activeIssue !== null;
+  useEffect(() => {
+    if (!draggingRef.current) setIssues(initialIssues);
+  }, [initialIssues]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -82,7 +88,9 @@ export function KanbanBoard({
     if (!over) return;
     const targetStatus = resolveTargetStatus(String(over.id));
     const issue = findIssue(String(active.id));
-    if (!issue || !targetStatus || issue.status === targetStatus) return;
+    if (!targetStatus) return;
+    lastTargetStatus.current = targetStatus;
+    if (!issue || issue.status === targetStatus) return;
 
     setIssues((prev) =>
       prev.map((item) =>
@@ -94,12 +102,18 @@ export function KanbanBoard({
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveIssue(null);
-    if (!over) return;
 
     const issueKey = String(active.id);
     const issue = findIssue(issueKey);
-    const targetStatus = resolveTargetStatus(String(over.id));
-    if (!issue || !targetStatus) return;
+    // Falls beim Loslassen kein Drop-Ziel erkannt wird, zählt die zuletzt überfahrene Spalte
+    const targetStatus = over
+      ? resolveTargetStatus(String(over.id))
+      : lastTargetStatus.current;
+    lastTargetStatus.current = null;
+    if (!issue || !targetStatus) {
+      if (issue) router.refresh();
+      return;
+    }
 
     // Neue Position: zwischen Nachbarkarten in der Zielspalte einsortieren
     const columnIssues = issues
@@ -107,7 +121,7 @@ export function KanbanBoard({
       .sort((a, b) => a.order - b.order);
 
     let newOrder: number;
-    const overIndex = columnIssues.findIndex((item) => item.key === String(over.id));
+    const overIndex = columnIssues.findIndex((item) => item.key === String(over?.id));
     if (overIndex === -1) {
       newOrder = (columnIssues.at(-1)?.order ?? 0) + 1;
     } else {
@@ -162,6 +176,7 @@ export function KanbanBoard({
       </div>
 
       <DndContext
+        id="kanban-board"
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={onDragStart}
