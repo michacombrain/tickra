@@ -8,13 +8,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
   }
 
-  const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+  const q = request.nextUrl.searchParams.get("q")?.trim().slice(0, 100) ?? "";
   if (q.length < 2) return NextResponse.json([]);
 
   const issues = await db.issue.findMany({
     where: {
       project: { members: { some: { userId: session.user.id } } },
-      OR: [{ title: { contains: q } }, { key: { contains: q } }],
+      // Keys werden groß gespeichert ("web-3" soll trotzdem WEB-3 finden)
+      OR: [
+        { title: { contains: q } },
+        { key: { contains: q.toUpperCase() } },
+        { description: { contains: q } },
+      ],
     },
     select: { key: true, title: true, type: true, project: { select: { key: true } } },
     orderBy: { updatedAt: "desc" },

@@ -18,13 +18,6 @@ export const TYPE_LABELS: Record<IssueType, string> = {
   EPIC: "Epic",
 };
 
-export const TYPE_COLORS: Record<IssueType, string> = {
-  STORY: "#16a34a",
-  TASK: "#3b82f6",
-  BUG: "#dc2626",
-  EPIC: "#9333ea",
-};
-
 export const ISSUE_PRIORITIES = ["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"] as const;
 export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
 
@@ -36,14 +29,6 @@ export const PRIORITY_LABELS: Record<IssuePriority, string> = {
   LOWEST: "Sehr niedrig",
 };
 
-export const PRIORITY_COLORS: Record<IssuePriority, string> = {
-  HIGHEST: "#dc2626",
-  HIGH: "#ea580c",
-  MEDIUM: "#d97706",
-  LOW: "#16a34a",
-  LOWEST: "#6b7280",
-};
-
 export const SPRINT_STATUSES = ["PLANNED", "ACTIVE", "COMPLETED"] as const;
 export type SprintStatus = (typeof SPRINT_STATUSES)[number];
 
@@ -52,3 +37,5 @@ export const SPRINT_STATUS_LABELS: Record<SprintStatus, string> = {
   ACTIVE: "Aktiv",
   COMPLETED: "Abgeschlossen",
 };
+
+export const STORY_POINT_OPTIONS = [1, 2, 3, 5, 8, 13, 21] as const;

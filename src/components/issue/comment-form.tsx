@@ -24,11 +24,27 @@ export function CommentForm({
 
   return (
     <form ref={formRef} action={formAction} className="space-y-2">
-      <Textarea name="body" placeholder="Kommentar schreiben…" rows={3} required />
+      <Textarea
+        name="body"
+        placeholder="Kommentar schreiben…"
+        rows={3}
+        required
+        maxLength={5000}
+        onKeyDown={(e) => {
+          // Cmd/Strg + Enter sendet ab
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            formRef.current?.requestSubmit();
+          }
+        }}
+      />
       {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" size="sm" disabled={pending}>
-        {pending ? "Wird gespeichert…" : "Kommentieren"}
-      </Button>
+      <div className="flex items-center gap-3">
+        <Button type="submit" size="sm" disabled={pending}>
+          {pending ? "Wird gespeichert…" : "Kommentieren"}
+        </Button>
+        <span className="text-xs text-muted-foreground">⌘/Strg + Enter</span>
+      </div>
     </form>
   );
 }

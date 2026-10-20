@@ -9,7 +9,7 @@ export default async function IssueModalPage({
   const { key, issueKey } = await params;
   return (
     <IssueModal>
-      <IssueDetail projectKey={key} issueKey={issueKey} />
+      <IssueDetail projectKey={key} issueKey={issueKey} inModal />
     </IssueModal>
   );
 }

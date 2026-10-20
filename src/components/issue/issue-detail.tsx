@@ -1,36 +1,48 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ExpandIcon } from "lucide-react";
 import { requireProjectAccess } from "@/lib/access";
 import { db } from "@/lib/db";
+import { dateTimeFormat, toDateInput } from "@/lib/format";
 import { TypeIcon } from "@/components/issue-badges";
 import { IssueType } from "@/lib/constants";
-import { UserAvatar } from "@/components/user-avatar";
 import { Separator } from "@/components/ui/separator";
 import { IssueSidePanel } from "@/components/issue/issue-side-panel";
 import { IssueTextEditors } from "@/components/issue/issue-text-editors";
 import { CommentForm } from "@/components/issue/comment-form";
+import { CommentItem } from "@/components/issue/comment-item";
 
 export async function IssueDetail({
   projectKey,
   issueKey,
+  inModal = false,
 }: {
   projectKey: string;
   issueKey: string;
+  inModal?: boolean;
 }) {
-  const { project } = await requireProjectAccess(projectKey);
+  const { user, project, isAdmin } = await requireProjectAccess(projectKey);
 
-  const issue = await db.issue.findUnique({
-    where: { key: issueKey, projectId: project.id },
-    include: {
-      assignee: { select: { id: true, name: true, avatarColor: true } },
-      reporter: { select: { name: true, avatarColor: true } },
-      sprint: { select: { name: true } },
-      labels: { select: { labelId: true } },
-      comments: {
-        include: { author: { select: { name: true, avatarColor: true } } },
-        orderBy: { createdAt: "asc" },
+  const [issue, sprints] = await Promise.all([
+    db.issue.findUnique({
+      where: { key: issueKey, projectId: project.id },
+      include: {
+        assignee: { select: { id: true, name: true, avatarColor: true } },
+        reporter: { select: { name: true, avatarColor: true } },
+        sprint: { select: { id: true, name: true, status: true } },
+        labels: { select: { labelId: true } },
+        comments: {
+          include: { author: { select: { id: true, name: true, avatarColor: true } } },
+          orderBy: { createdAt: "asc" },
+        },
       },
-    },
-  });
+    }),
+    db.sprint.findMany({
+      where: { projectId: project.id, status: { in: ["ACTIVE", "PLANNED"] } },
+      select: { id: true, name: true, status: true },
+      orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+    }),
+  ]);
   if (!issue) notFound();
 
   const members = project.members.map((member) => ({
@@ -39,21 +51,35 @@ export async function IssueDetail({
     avatarColor: member.user.avatarColor,
   }));
 
-  const dateFormat = new Intl.DateTimeFormat("de-DE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  // Abgeschlossener Sprint des Tickets soll trotzdem angezeigt werden
+  const sprintOptions =
+    issue.sprint && !sprints.some((sprint) => sprint.id === issue.sprint!.id)
+      ? [...sprints, issue.sprint]
+      : sprints;
 
   return (
-    <div className="grid gap-6 md:grid-cols-[1fr_240px]">
+    <div className="grid gap-8 md:grid-cols-[1fr_220px]">
       <div className="min-w-0 space-y-6">
         <div>
-          <div className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
-            <TypeIcon type={issue.type as IssueType} />
+          <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <TypeIcon type={issue.type as IssueType} className="size-3.5" />
+            <Link href={`/projects/${projectKey}/backlog`} className="hover:text-foreground">
+              {project.name}
+            </Link>
+            <span>/</span>
             <span className="font-mono">{issue.key}</span>
-            {issue.sprint && <span>· {issue.sprint.name}</span>}
+            {inModal && (
+              <a
+                href={`/projects/${projectKey}/issues/${issue.key}`}
+                className="ml-auto mr-8 inline-flex items-center gap-1 hover:text-foreground"
+                title="Als eigene Seite öffnen"
+              >
+                <ExpandIcon className="size-3.5" />
+              </a>
+            )}
           </div>
           <IssueTextEditors
+            key={`${issue.title}|${issue.description}`}
             projectKey={projectKey}
             issueKey={issue.key}
             title={issue.title}
@@ -64,30 +90,27 @@ export async function IssueDetail({
         <Separator />
 
         <div>
-          <h3 className="mb-3 text-sm font-semibold">
-            Kommentare ({issue.comments.length})
+          <h3 className="mb-4 text-sm font-semibold">
+            Kommentare <span className="font-normal text-muted-foreground">{issue.comments.length}</span>
           </h3>
-          <ul className="space-y-4">
+          <ul className="space-y-5">
             {issue.comments.map((comment) => (
-              <li key={comment.id} className="flex gap-3">
-                <UserAvatar
-                  name={comment.author.name}
-                  color={comment.author.avatarColor}
-                  className="mt-0.5"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm">
-                    <span className="font-medium">{comment.author.name}</span>{" "}
-                    <span className="text-xs text-muted-foreground">
-                      {dateFormat.format(comment.createdAt)}
-                    </span>
-                  </div>
-                  <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
-                </div>
-              </li>
+              <CommentItem
+                key={comment.id}
+                projectKey={projectKey}
+                comment={{
+                  id: comment.id,
+                  body: comment.body,
+                  createdAt: comment.createdAt.toISOString(),
+                  edited: comment.editedAt !== null,
+                  author: comment.author,
+                }}
+                canEdit={comment.author.id === user.id}
+                canDelete={comment.author.id === user.id || isAdmin}
+              />
             ))}
           </ul>
-          <div className="mt-4">
+          <div className="mt-5">
             <CommentForm projectKey={projectKey} issueKey={issue.key} />
           </div>
         </div>
@@ -96,11 +119,16 @@ export async function IssueDetail({
       <IssueSidePanel
         projectKey={projectKey}
         issueKey={issue.key}
+        inModal={inModal}
         status={issue.status}
         priority={issue.priority}
         type={issue.type}
         assigneeId={issue.assignee?.id ?? null}
+        sprintId={issue.sprint?.id ?? null}
+        storyPoints={issue.storyPoints}
+        dueDate={toDateInput(issue.dueDate)}
         members={members}
+        sprints={sprintOptions}
         labels={project.labels.map((label) => ({
           id: label.id,
           name: label.name,
@@ -108,7 +136,8 @@ export async function IssueDetail({
         }))}
         activeLabelIds={issue.labels.map((entry) => entry.labelId)}
         reporter={issue.reporter}
-        createdAt={dateFormat.format(issue.createdAt)}
+        createdAt={dateTimeFormat.format(issue.createdAt)}
+        updatedAt={dateTimeFormat.format(issue.updatedAt)}
       />
     </div>
   );

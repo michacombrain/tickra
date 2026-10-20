@@ -83,20 +83,22 @@ async function main() {
     assigneeId: string | null;
     description?: string;
     labels?: string[];
+    storyPoints?: number;
+    dueInDays?: number;
   };
 
   const issues: SeedIssue[] = [
-    { title: "Navigation: Responsive Menü implementieren", type: "STORY", status: "IN_PROGRESS", priority: "HIGH", sprintId: sprint1.id, assigneeId: micha.id, description: "Das Hauptmenü soll auf Mobile als Burger-Menü erscheinen.\n\n**Akzeptanzkriterien:**\n- Breakpoint bei 768px\n- Animation beim Öffnen\n- Tastatur-navigierbar", labels: ["Frontend"] },
-    { title: "Login-Seite stylen", type: "TASK", status: "TODO", priority: "MEDIUM", sprintId: sprint1.id, assigneeId: anna.id, labels: ["Frontend", "Design"] },
-    { title: "Bug: Footer überlappt Inhalt auf Safari", type: "BUG", status: "TODO", priority: "HIGHEST", sprintId: sprint1.id, assigneeId: tom.id, description: "Auf Safari 17 überlappt der Footer den Hauptinhalt bei kurzen Seiten.", labels: ["Frontend", "Dringend"] },
-    { title: "API-Endpunkt für Produktliste", type: "STORY", status: "IN_REVIEW", priority: "HIGH", sprintId: sprint1.id, assigneeId: micha.id, labels: ["Backend"] },
-    { title: "Datenbank-Schema für Bestellungen", type: "TASK", status: "DONE", priority: "HIGH", sprintId: sprint1.id, assigneeId: tom.id, labels: ["Backend"] },
-    { title: "Hero-Sektion: Animationen einbauen", type: "TASK", status: "IN_PROGRESS", priority: "LOW", sprintId: sprint1.id, assigneeId: anna.id, labels: ["Design"] },
-    { title: "SEO: Meta-Tags für alle Seiten", type: "TASK", status: "TODO", priority: "MEDIUM", sprintId: sprint1.id, assigneeId: null },
-    { title: "CI/CD-Pipeline aufsetzen", type: "TASK", status: "DONE", priority: "MEDIUM", sprintId: sprint1.id, assigneeId: micha.id, labels: ["Backend"] },
-    { title: "Warenkorb-Funktionalität", type: "STORY", status: "TODO", priority: "HIGHEST", sprintId: sprint2.id, assigneeId: null, description: "Als Kunde möchte ich Produkte in den Warenkorb legen können.", labels: ["Frontend", "Backend"] },
-    { title: "Checkout mit Stripe", type: "STORY", status: "TODO", priority: "HIGH", sprintId: sprint2.id, assigneeId: null, labels: ["Backend"] },
-    { title: "Produktdetailseite designen", type: "TASK", status: "TODO", priority: "MEDIUM", sprintId: sprint2.id, assigneeId: anna.id, labels: ["Design"] },
+    { title: "Navigation: Responsive Menü implementieren", storyPoints: 5, dueInDays: 3, type: "STORY", status: "IN_PROGRESS", priority: "HIGH", sprintId: sprint1.id, assigneeId: micha.id, description: "Das Hauptmenü soll auf Mobile als Burger-Menü erscheinen.\n\n**Akzeptanzkriterien:**\n- Breakpoint bei 768px\n- Animation beim Öffnen\n- Tastatur-navigierbar", labels: ["Frontend"] },
+    { title: "Login-Seite stylen", storyPoints: 2, dueInDays: 5, type: "TASK", status: "TODO", priority: "MEDIUM", sprintId: sprint1.id, assigneeId: anna.id, labels: ["Frontend", "Design"] },
+    { title: "Bug: Footer überlappt Inhalt auf Safari", storyPoints: 3, dueInDays: -1, type: "BUG", status: "TODO", priority: "HIGHEST", sprintId: sprint1.id, assigneeId: tom.id, description: "Auf Safari 17 überlappt der Footer den Hauptinhalt bei kurzen Seiten.", labels: ["Frontend", "Dringend"] },
+    { title: "API-Endpunkt für Produktliste", storyPoints: 8, type: "STORY", status: "IN_REVIEW", priority: "HIGH", sprintId: sprint1.id, assigneeId: micha.id, labels: ["Backend"] },
+    { title: "Datenbank-Schema für Bestellungen", storyPoints: 5, type: "TASK", status: "DONE", priority: "HIGH", sprintId: sprint1.id, assigneeId: tom.id, labels: ["Backend"] },
+    { title: "Hero-Sektion: Animationen einbauen", storyPoints: 3, type: "TASK", status: "IN_PROGRESS", priority: "LOW", sprintId: sprint1.id, assigneeId: anna.id, labels: ["Design"] },
+    { title: "SEO: Meta-Tags für alle Seiten", storyPoints: 2, type: "TASK", status: "TODO", priority: "MEDIUM", sprintId: sprint1.id, assigneeId: null },
+    { title: "CI/CD-Pipeline aufsetzen", storyPoints: 3, type: "TASK", status: "DONE", priority: "MEDIUM", sprintId: sprint1.id, assigneeId: micha.id, labels: ["Backend"] },
+    { title: "Warenkorb-Funktionalität", storyPoints: 8, type: "STORY", status: "TODO", priority: "HIGHEST", sprintId: sprint2.id, assigneeId: null, description: "Als Kunde möchte ich Produkte in den Warenkorb legen können.", labels: ["Frontend", "Backend"] },
+    { title: "Checkout mit Stripe", storyPoints: 13, type: "STORY", status: "TODO", priority: "HIGH", sprintId: sprint2.id, assigneeId: null, labels: ["Backend"] },
+    { title: "Produktdetailseite designen", storyPoints: 5, type: "TASK", status: "TODO", priority: "MEDIUM", sprintId: sprint2.id, assigneeId: anna.id, labels: ["Design"] },
     { title: "Newsletter-Anmeldung im Footer", type: "TASK", status: "TODO", priority: "LOWEST", sprintId: null, assigneeId: null },
     { title: "Bug: Umlaute in URLs falsch kodiert", type: "BUG", status: "TODO", priority: "MEDIUM", sprintId: null, assigneeId: null, labels: ["Backend"] },
     { title: "Dark Mode unterstützen", type: "STORY", status: "TODO", priority: "LOW", sprintId: null, assigneeId: null, labels: ["Frontend", "Design"] },
@@ -120,6 +122,11 @@ async function main() {
         sprintId: issue.sprintId,
         assigneeId: issue.assigneeId,
         reporterId: micha.id,
+        storyPoints: issue.storyPoints ?? null,
+        dueDate:
+          issue.dueInDays !== undefined
+            ? new Date(Date.now() + issue.dueInDays * 24 * 3600 * 1000)
+            : null,
       },
     });
     for (const labelName of issue.labels ?? []) {

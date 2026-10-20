@@ -23,8 +23,8 @@ export function CreateProjectDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <PlusIcon className="size-4" />
+        <Button size="sm">
+          <PlusIcon />
           Projekt anlegen
         </Button>
       </DialogTrigger>
@@ -38,7 +38,7 @@ export function CreateProjectDialog() {
         <form action={formAction} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="project-name">Name</Label>
-            <Input id="project-name" name="name" placeholder="Website Relaunch" required autoFocus />
+            <Input id="project-name" name="name" placeholder="Website Relaunch" required minLength={3} maxLength={80} autoFocus />
           </div>
           <div className="space-y-2">
             <Label htmlFor="project-key">Key</Label>
@@ -48,12 +48,14 @@ export function CreateProjectDialog() {
               placeholder="WEB"
               required
               maxLength={10}
-              className="uppercase"
+              pattern="[A-Za-z][A-Za-z0-9]{1,9}"
+              title="2–10 Buchstaben/Ziffern, beginnt mit Buchstabe"
+              className="font-mono uppercase"
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="project-description">Beschreibung (optional)</Label>
-            <Textarea id="project-description" name="description" rows={3} />
+            <Textarea id="project-description" name="description" rows={3} maxLength={500} />
           </div>
           {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
           <Button type="submit" className="w-full" disabled={pending}>

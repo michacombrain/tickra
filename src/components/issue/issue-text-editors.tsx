@@ -42,26 +42,29 @@ export function IssueTextEditors({
           <Input
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
-            className="text-lg font-semibold"
+            className="h-auto py-1 text-xl font-semibold md:text-xl"
+            maxLength={200}
             autoFocus
+            onBlur={() => {
+              const next = titleDraft.trim();
+              if (next && next !== title) save({ title: next }, () => setEditingTitle(false));
+              else setEditingTitle(false);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && titleDraft.trim()) {
                 save({ title: titleDraft.trim() }, () => setEditingTitle(false));
               }
-              if (e.key === "Escape") setEditingTitle(false);
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                setTitleDraft(title);
+                setEditingTitle(false);
+              }
             }}
           />
-          <Button
-            size="sm"
-            disabled={isPending || !titleDraft.trim()}
-            onClick={() => save({ title: titleDraft.trim() }, () => setEditingTitle(false))}
-          >
-            Speichern
-          </Button>
         </div>
       ) : (
         <h1
-          className="cursor-text text-xl font-bold tracking-tight hover:bg-accent/40"
+          className="-mx-1 cursor-text rounded-md px-1 py-1 text-xl font-semibold tracking-tight hover:bg-accent/60"
           title="Klicken zum Bearbeiten"
           onClick={() => {
             setTitleDraft(title);
@@ -73,7 +76,7 @@ export function IssueTextEditors({
       )}
 
       <div>
-        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="mb-1.5 text-xs font-medium text-muted-foreground">
           Beschreibung
         </div>
         {editingDescription ? (
@@ -82,7 +85,17 @@ export function IssueTextEditors({
               value={descriptionDraft}
               onChange={(e) => setDescriptionDraft(e.target.value)}
               rows={6}
+              maxLength={10000}
               autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  save({ description: descriptionDraft.trim() || null }, () => setEditingDescription(false));
+                }
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setEditingDescription(false);
+                }
+              }}
             />
             <div className="flex gap-2">
               <Button
@@ -103,7 +116,7 @@ export function IssueTextEditors({
           </div>
         ) : (
           <div
-            className="min-h-10 cursor-text whitespace-pre-wrap rounded-md p-2 -mx-2 text-sm hover:bg-accent/40"
+            className="-mx-2 min-h-10 cursor-text whitespace-pre-wrap break-words rounded-md p-2 text-sm leading-relaxed hover:bg-accent/60"
             title="Klicken zum Bearbeiten"
             onClick={() => {
               setDescriptionDraft(description ?? "");
