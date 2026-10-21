@@ -62,11 +62,11 @@ export function IssueSidePanel({
   projectKey: string;
   issueKey: string;
   inModal: boolean;
-  members: { id: string; name: string; avatarColor: string }[];
+  members: { id: string; name: string; avatarColor: string; kind: string }[];
   sprints: { id: string; name: string; status: string }[];
   labels: { id: string; name: string; color: string }[];
   activeLabelIds: string[];
-  reporter: { name: string; avatarColor: string };
+  reporter: { name: string; avatarColor: string; kind: string };
   createdAt: string;
   updatedAt: string;
 }) {
@@ -124,7 +124,7 @@ export function IssueSidePanel({
             <SelectValue>
               {assignee ? (
                 <span className="flex items-center gap-2">
-                  <UserAvatar name={assignee.name} color={assignee.avatarColor} className="size-5 text-[9px]" />
+                  <UserAvatar name={assignee.name} color={assignee.avatarColor} kind={assignee.kind} className="size-5 text-[9px]" />
                   {assignee.name}
                 </span>
               ) : (
@@ -135,7 +135,10 @@ export function IssueSidePanel({
           <SelectContent>
             <SelectItem value={NONE}>Niemand</SelectItem>
             {members.map((member) => (
-              <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+              <SelectItem key={member.id} value={member.id}>
+                {member.name}
+                {member.kind === "AGENT" && " (KI)"}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -264,7 +267,7 @@ export function IssueSidePanel({
 
       <div className="space-y-1.5 border-t pt-4 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
-          <UserAvatar name={reporter.name} color={reporter.avatarColor} className="size-5 text-[9px]" />
+          <UserAvatar name={reporter.name} color={reporter.avatarColor} kind={reporter.kind} className="size-5 text-[9px]" />
           <span>
             Erstellt von <span className="text-foreground">{reporter.name}</span>
           </span>

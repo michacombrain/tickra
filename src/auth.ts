@@ -22,7 +22,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = await db.user.findUnique({
           where: { email: parsed.data.email },
         });
-        if (!user) return null;
+        // Agents melden sich nur per API-Key an, nie über das Login-Formular
+        if (!user || user.kind !== "HUMAN") return null;
 
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!valid) return null;

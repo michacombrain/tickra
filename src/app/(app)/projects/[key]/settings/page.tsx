@@ -11,6 +11,9 @@ import {
   RemoveMemberButton,
 } from "@/components/settings-forms";
 import { LabelBadge } from "@/components/issue-badges";
+import { AgentKeyButtons, CreateAgentForm } from "@/components/agent-forms";
+import { db } from "@/lib/db";
+import { relativeTime } from "@/lib/format";
 
 function Section({
   title,
@@ -40,6 +43,12 @@ export default async function SettingsPage({
   const { key } = await params;
   const { user, project, isAdmin } = await requireProjectAccess(key);
   const isOwner = project.ownerId === user.id;
+  const humans = project.members.filter((member) => member.user.kind !== "AGENT");
+  const agents = project.members.filter((member) => member.user.kind === "AGENT");
+  const agentKeys = await db.apiKey.findMany({
+    where: { userId: { in: agents.map((a) => a.userId) }, revokedAt: null },
+    select: { userId: true, prefix: true, lastUsedAt: true },
+  });
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -59,9 +68,9 @@ export default async function SettingsPage({
 
       <Section title="Mitglieder" description="Wer Zugriff auf dieses Projekt hat.">
         <ul className="divide-y rounded-lg border">
-          {project.members.map((member) => (
+          {humans.map((member) => (
             <li key={member.userId} className="flex items-center gap-3 px-3 py-2">
-              <UserAvatar name={member.user.name} color={member.user.avatarColor} />
+              <UserAvatar name={member.user.name} color={member.user.avatarColor} kind={member.user.kind} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">
                   {member.user.name}
@@ -85,6 +94,48 @@ export default async function SettingsPage({
           ))}
         </ul>
         {isAdmin && <AddMemberForm projectKey={project.key} />}
+      </Section>
+
+      <Section
+        title="KI-Agenten"
+        description="Agenten arbeiten über die API oder MCP an Tickets – jede Änderung landet mit ihrem Namen im Verlauf."
+      >
+        {agents.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Noch keine Agenten. Lege einen an und verbinde ihn mit dem angezeigten Befehl mit Claude Code.
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border">
+            {agents.map((member) => {
+              const key = agentKeys.find((k) => k.userId === member.userId);
+              return (
+                <li key={member.userId} className="flex items-center gap-3 px-3 py-2">
+                  <UserAvatar name={member.user.name} color={member.user.avatarColor} kind="AGENT" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{member.user.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {key ? (
+                        <>
+                          <span className="font-mono">{key.prefix}_…</span>
+                          {" · "}
+                          <span suppressHydrationWarning>
+                            {key.lastUsedAt ? `zuletzt aktiv ${relativeTime(key.lastUsedAt)}` : "noch nie benutzt"}
+                          </span>
+                        </>
+                      ) : (
+                        "Kein aktiver Key"
+                      )}
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <AgentKeyButtons projectKey={project.key} agentId={member.userId} name={member.user.name} />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {isAdmin && <CreateAgentForm projectKey={project.key} />}
       </Section>
 
       <Section title="Labels" description="Zum Kategorisieren von Tickets.">
