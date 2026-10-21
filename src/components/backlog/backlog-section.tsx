@@ -50,7 +50,7 @@ type IssueItem = {
   priority: string;
   storyPoints: number | null;
   dueDate: string | null;
-  assignee: { name: string; avatarColor: string } | null;
+  assignee: { name: string; avatarColor: string; kind: string } | null;
 };
 
 type SprintInfo = { id: string; name: string; goal: string | null; status: string };
@@ -201,7 +201,7 @@ export function BacklogSection({
               <StoryPoints points={issue.storyPoints} />
               <PriorityIcon priority={issue.priority as IssuePriority} className="size-3.5" />
               {issue.assignee ? (
-                <UserAvatar name={issue.assignee.name} color={issue.assignee.avatarColor} className="size-6 text-[10px]" />
+                <UserAvatar name={issue.assignee.name} color={issue.assignee.avatarColor} kind={issue.assignee.kind} className="size-6 text-[10px]" />
               ) : (
                 <span className="size-6 shrink-0 rounded-full border border-dashed" title="Nicht zugewiesen" />
               )}

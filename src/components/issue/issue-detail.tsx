@@ -11,6 +11,7 @@ import { IssueSidePanel } from "@/components/issue/issue-side-panel";
 import { IssueTextEditors } from "@/components/issue/issue-text-editors";
 import { CommentForm } from "@/components/issue/comment-form";
 import { CommentItem } from "@/components/issue/comment-item";
+import { ActivityList } from "@/components/issue/activity-list";
 
 export async function IssueDetail({
   projectKey,
@@ -27,13 +28,19 @@ export async function IssueDetail({
     db.issue.findUnique({
       where: { key: issueKey, projectId: project.id },
       include: {
-        assignee: { select: { id: true, name: true, avatarColor: true } },
-        reporter: { select: { name: true, avatarColor: true } },
+        assignee: { select: { id: true, name: true, avatarColor: true, kind: true } },
+        reporter: { select: { name: true, avatarColor: true, kind: true } },
         sprint: { select: { id: true, name: true, status: true } },
         labels: { select: { labelId: true } },
         comments: {
-          include: { author: { select: { id: true, name: true, avatarColor: true } } },
+          include: { author: { select: { id: true, name: true, avatarColor: true, kind: true } } },
           orderBy: { createdAt: "asc" },
+        },
+        activities: {
+          where: { action: { not: "comment.added" } },
+          include: { actor: { select: { name: true, avatarColor: true, kind: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 30,
         },
       },
     }),
@@ -49,6 +56,7 @@ export async function IssueDetail({
     id: member.user.id,
     name: member.user.name,
     avatarColor: member.user.avatarColor,
+    kind: member.user.kind,
   }));
 
   // Abgeschlossener Sprint des Tickets soll trotzdem angezeigt werden
@@ -113,6 +121,13 @@ export async function IssueDetail({
           <div className="mt-5">
             <CommentForm projectKey={projectKey} issueKey={issue.key} />
           </div>
+        </div>
+
+        <Separator />
+
+        <div>
+          <h3 className="mb-4 text-sm font-semibold">Verlauf</h3>
+          <ActivityList entries={issue.activities} />
         </div>
       </div>
 

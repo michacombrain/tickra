@@ -52,7 +52,7 @@ export function KanbanBoard({
   sprintId: string;
   currentUserId: string;
   initialIssues: BoardIssue[];
-  members: { id: string; name: string; avatarColor: string }[];
+  members: { id: string; name: string; avatarColor: string; kind: string }[];
 }) {
   const [issues, setIssues] = useState(initialIssues);
   const [activeIssue, setActiveIssue] = useState<BoardIssue | null>(null);
@@ -231,7 +231,7 @@ export function KanbanBoard({
               title={member.name}
               aria-pressed={assigneeFilter === member.id}
             >
-              <UserAvatar name={member.name} color={member.avatarColor} />
+              <UserAvatar name={member.name} color={member.avatarColor} kind={member.kind} />
             </button>
           ))}
         </div>

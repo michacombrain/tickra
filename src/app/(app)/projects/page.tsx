@@ -11,7 +11,7 @@ export default async function ProjectsPage() {
   const projects = await db.project.findMany({
     where: { members: { some: { userId: user.id } } },
     include: {
-      members: { include: { user: { select: { name: true, avatarColor: true } } } },
+      members: { include: { user: { select: { name: true, avatarColor: true, kind: true } } } },
       sprints: {
         where: { status: "ACTIVE" },
         select: { name: true, issues: { select: { status: true } } },
@@ -85,6 +85,7 @@ export default async function ProjectsPage() {
                         key={member.userId}
                         name={member.user.name}
                         color={member.user.avatarColor}
+                        kind={member.user.kind}
                         className="size-6 text-[10px] ring-2 ring-background"
                       />
                     ))}

@@ -4,24 +4,42 @@ import { requireUser } from "@/lib/session";
 
 export const ADMIN_ONLY = "Nur Projekt-Admins dürfen das.";
 
-/** Liefert User + Projekt, wenn der eingeloggte User Mitglied ist – sonst 404. */
-export async function requireProjectAccess(projectKey: string) {
-  const user = await requireUser();
+export const userSummarySelect = {
+  id: true,
+  name: true,
+  email: true,
+  avatarColor: true,
+  kind: true,
+} as const;
+
+/** Projekt + Mitgliedschaft eines Users laden – null, wenn kein Zugriff. Ohne Redirects (auch für die API). */
+export async function loadProjectAccess(userId: string, projectKey: string) {
   const project = await db.project.findUnique({
     where: { key: projectKey },
     include: {
       members: {
-        include: { user: { select: { id: true, name: true, email: true, avatarColor: true } } },
+        include: { user: { select: userSummarySelect } },
         orderBy: { user: { name: "asc" } },
       },
       labels: { orderBy: { name: "asc" } },
     },
   });
-  if (!project) notFound();
+  if (!project) return null;
 
-  const membership = project.members.find((member) => member.userId === user.id);
-  if (!membership) notFound();
+  const membership = project.members.find((member) => member.userId === userId);
+  if (!membership) return null;
 
-  const isAdmin = membership.role === "ADMIN" || project.ownerId === user.id;
-  return { user, project, role: membership.role, isAdmin };
+  const isAdmin = membership.role === "ADMIN" || project.ownerId === userId;
+  return { project, role: membership.role, isAdmin };
+}
+
+export type ProjectAccess = NonNullable<Awaited<ReturnType<typeof loadProjectAccess>>>;
+export type AccessProject = ProjectAccess["project"];
+
+/** Liefert User + Projekt, wenn der eingeloggte User Mitglied ist – sonst 404. */
+export async function requireProjectAccess(projectKey: string) {
+  const user = await requireUser();
+  const access = await loadProjectAccess(user.id, projectKey);
+  if (!access) notFound();
+  return { user, ...access };
 }

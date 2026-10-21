@@ -19,7 +19,7 @@ export default async function BoardPage({
     include: {
       issues: {
         include: {
-          assignee: { select: { id: true, name: true, avatarColor: true } },
+          assignee: { select: { id: true, name: true, avatarColor: true, kind: true } },
           labels: { include: { label: true } },
         },
         orderBy: { order: "asc" },
@@ -45,6 +45,7 @@ export default async function BoardPage({
     id: member.user.id,
     name: member.user.name,
     avatarColor: member.user.avatarColor,
+    kind: member.user.kind,
   }));
 
   const issues = activeSprint.issues.map((issue) => ({

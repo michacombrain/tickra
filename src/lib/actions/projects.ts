@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { ADMIN_ONLY, requireProjectAccess } from "@/lib/access";
+import { logActivity } from "@/lib/services/activity";
 
 export type FormState = { error?: string; success?: boolean } | undefined;
 
@@ -91,7 +92,7 @@ export async function addMemberAction(
   _prev: FormState,
   formData: FormData
 ): Promise<FormState> {
-  const { project, isAdmin } = await requireProjectAccess(projectKey);
+  const { user, project, isAdmin } = await requireProjectAccess(projectKey);
   if (!isAdmin) return { error: ADMIN_ONLY };
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -105,6 +106,10 @@ export async function addMemberAction(
   await db.projectMember.create({
     data: { projectId: project.id, userId: newMember.id },
   });
+  await logActivity(
+    { user, project, isAdmin, via: "UI" },
+    { action: "member.added", details: { userId: newMember.id, name: newMember.name } }
+  );
   revalidateProject(projectKey);
   return { success: true };
 }
@@ -123,7 +128,7 @@ async function removeMember(projectId: string, userId: string) {
 }
 
 export async function removeMemberAction(projectKey: string, userId: string): Promise<FormState> {
-  const { project, isAdmin } = await requireProjectAccess(projectKey);
+  const { user, project, isAdmin } = await requireProjectAccess(projectKey);
   if (!isAdmin) return { error: ADMIN_ONLY };
   if (userId === project.ownerId) return { error: "Der Owner kann nicht entfernt werden." };
   if (!project.members.some((member) => member.userId === userId)) {
@@ -131,6 +136,10 @@ export async function removeMemberAction(projectKey: string, userId: string): Pr
   }
 
   await removeMember(project.id, userId);
+  await logActivity(
+    { user, project, isAdmin, via: "UI" },
+    { action: "member.removed", details: { userId } }
+  );
   revalidateProject(projectKey);
 }
 

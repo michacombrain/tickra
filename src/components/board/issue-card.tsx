@@ -17,7 +17,7 @@ export type BoardIssue = {
   order: number;
   storyPoints: number | null;
   dueDate: string | null;
-  assignee: { id: string; name: string; avatarColor: string } | null;
+  assignee: { id: string; name: string; avatarColor: string; kind: string } | null;
   labels: { name: string; color: string }[];
 };
 
@@ -75,6 +75,7 @@ export function IssueCard({
             <UserAvatar
               name={issue.assignee.name}
               color={issue.assignee.avatarColor}
+              kind={issue.assignee.kind}
               className="size-5 text-[9px]"
             />
           ) : (

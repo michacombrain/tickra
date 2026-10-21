@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/access";
+import { logActivity } from "@/lib/services/activity";
 
 export type FormState = { error?: string } | undefined;
 
@@ -69,7 +70,7 @@ export async function startSprintAction(
   sprintId: string,
   weeks = 2
 ): Promise<FormState> {
-  const { project } = await requireProjectAccess(projectKey);
+  const { user, project, isAdmin } = await requireProjectAccess(projectKey);
   const parsedWeeks = durationSchema.safeParse(weeks);
   if (!parsedWeeks.success) return { error: "Ungültige Sprint-Dauer." };
 
@@ -87,12 +88,16 @@ export async function startSprintAction(
     },
   });
   if (result.count === 0) return { error: "Nur geplante Sprints können gestartet werden." };
+  await logActivity(
+    { user, project, isAdmin, via: "UI" },
+    { action: "sprint.started", details: { sprintId, weeks: parsedWeeks.data } }
+  );
   revalidateProject(projectKey);
 }
 
 /** Schließt den Sprint ab; offene Tickets wandern zurück ins Backlog. */
 export async function completeSprintAction(projectKey: string, sprintId: string): Promise<FormState> {
-  const { project } = await requireProjectAccess(projectKey);
+  const { user, project, isAdmin } = await requireProjectAccess(projectKey);
 
   const sprint = await db.sprint.findFirst({
     where: { id: sprintId, projectId: project.id, status: "ACTIVE" },
@@ -109,6 +114,10 @@ export async function completeSprintAction(projectKey: string, sprintId: string)
       data: { status: "COMPLETED", endDate: new Date() },
     }),
   ]);
+  await logActivity(
+    { user, project, isAdmin, via: "UI" },
+    { action: "sprint.completed", details: { sprintId, name: sprint.name } }
+  );
   revalidateProject(projectKey);
 }
 

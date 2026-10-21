@@ -10,8 +10,8 @@ export async function requireUser() {
   // JWT kann einen inzwischen gelöschten User referenzieren (z.B. nach DB-Reset)
   const user = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, name: true, email: true, avatarColor: true },
+    select: { id: true, name: true, email: true, avatarColor: true, kind: true },
   });
-  if (!user) redirect("/login");
+  if (!user || user.kind !== "HUMAN") redirect("/login");
   return user;
 }

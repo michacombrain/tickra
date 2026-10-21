@@ -13,12 +13,51 @@ model User {
   email        String          @unique
   passwordHash String
   avatarColor  String          @default("#3b82f6")
+  kind         String          @default("HUMAN") // HUMAN | AGENT
+  // Bei Agents: der Mensch, der ihn angelegt hat
+  createdById  String?
+  createdBy    User?           @relation("AgentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAgents User[]         @relation("AgentCreator")
   createdAt    DateTime        @default(now())
   ownedProjects Project[]      @relation("ProjectOwner")
   memberships  ProjectMember[]
   assignedIssues Issue[]       @relation("IssueAssignee")
   reportedIssues Issue[]       @relation("IssueReporter")
   comments     Comment[]
+  apiKeys      ApiKey[]
+  activities   Activity[]
+}
+
+/// API-Key für REST-API und MCP. Gespeichert wird nur der SHA-256-Hash.
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  prefix     String    @unique // sichtbarer Teil, z.B. "tk_a1b2c3d4"
+  hash       String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Lückenloses Protokoll aller Änderungen – egal ob Mensch, UI, API oder Agent.
+model Activity {
+  id        String   @id @default(cuid())
+  projectId String
+  issueId   String?
+  issueKey  String? // bleibt erhalten, wenn das Ticket gelöscht wird
+  actorId   String
+  action    String // z.B. issue.created, issue.updated, comment.added
+  details   String? // JSON, z.B. {"changes":[{"field":"status","from":"TODO","to":"DONE"}]}
+  via       String   @default("UI") // UI | API | MCP
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issue     Issue?   @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  actor     User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([issueId, createdAt])
 }
 
 model Project {
@@ -33,6 +72,7 @@ model Project {
   sprints      Sprint[]
   issues       Issue[]
   labels       Label[]
+  activities   Activity[]
   createdAt    DateTime        @default(now())
 }
 
@@ -80,6 +120,7 @@ model Issue {
   reporter    User         @relation("IssueReporter", fields: [reporterId], references: [id])
   comments    Comment[]
   labels      IssueLabel[]
+  activities  Activity[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
