@@ -5,7 +5,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { IssuePriority, IssueType } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { LabelBadge, PriorityIcon, TypeIcon } from "@/components/issue-badges";
+import { DueDate, LabelBadge, PriorityIcon, StoryPoints, TypeIcon } from "@/components/issue-badges";
 import { UserAvatar } from "@/components/user-avatar";
 
 export type BoardIssue = {
@@ -15,6 +15,8 @@ export type BoardIssue = {
   status: string;
   priority: string;
   order: number;
+  storyPoints: number | null;
+  dueDate: string | null;
   assignee: { id: string; name: string; avatarColor: string } | null;
   labels: { name: string; color: string }[];
 };
@@ -31,6 +33,8 @@ export function IssueCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: issue.key, disabled: overlay });
 
+  const done = issue.status === "DONE";
+
   return (
     <div
       ref={setNodeRef}
@@ -38,14 +42,17 @@ export function IssueCard({
       {...attributes}
       {...listeners}
       className={cn(
-        "rounded-md border bg-background p-3 shadow-sm",
-        isDragging && "opacity-40",
-        overlay && "rotate-2 shadow-lg"
+        "group cursor-grab rounded-lg border bg-card p-3 shadow-xs transition-colors hover:border-foreground/20 active:cursor-grabbing",
+        isDragging && "opacity-30",
+        overlay && "cursor-grabbing shadow-lg ring-1 ring-foreground/10"
       )}
     >
       <Link
         href={`/projects/${projectKey}/issues/${issue.key}`}
-        className="block text-sm font-medium leading-snug hover:underline"
+        className={cn(
+          "block text-sm leading-snug hover:underline",
+          done && "text-muted-foreground line-through decoration-muted-foreground/40"
+        )}
         draggable={false}
       >
         {issue.title}
@@ -58,16 +65,20 @@ export function IssueCard({
         </div>
       )}
       <div className="mt-3 flex items-center gap-1.5">
-        <TypeIcon type={issue.type as IssueType} />
-        <span className="font-mono text-xs text-muted-foreground">{issue.key}</span>
+        <TypeIcon type={issue.type as IssueType} className="size-3.5" />
+        <span className="font-mono text-[11px] text-muted-foreground">{issue.key}</span>
+        <DueDate date={issue.dueDate} done={done} />
         <div className="ml-auto flex items-center gap-1.5">
-          <PriorityIcon priority={issue.priority as IssuePriority} />
-          {issue.assignee && (
+          <StoryPoints points={issue.storyPoints} />
+          <PriorityIcon priority={issue.priority as IssuePriority} className="size-3.5" />
+          {issue.assignee ? (
             <UserAvatar
               name={issue.assignee.name}
               color={issue.assignee.avatarColor}
-              className="size-6 text-[10px]"
+              className="size-5 text-[9px]"
             />
+          ) : (
+            <span className="size-5 rounded-full border border-dashed" title="Nicht zugewiesen" />
           )}
         </div>
       </div>

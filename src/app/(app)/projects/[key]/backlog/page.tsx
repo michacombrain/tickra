@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { BacklogSection } from "@/components/backlog/backlog-section";
 import { CreateSprintDialog } from "@/components/backlog/create-sprint-dialog";
 
+const issueInclude = { assignee: { select: { name: true, avatarColor: true } } } as const;
+
 export default async function BacklogPage({
   params,
 }: {
@@ -11,38 +13,35 @@ export default async function BacklogPage({
   const { key } = await params;
   const { project } = await requireProjectAccess(key);
 
-  const sprints = await db.sprint.findMany({
-    where: { projectId: project.id, status: { in: ["ACTIVE", "PLANNED"] } },
-    include: {
-      issues: {
-        include: { assignee: { select: { name: true, avatarColor: true } } },
-        orderBy: { order: "asc" },
-      },
-    },
-    orderBy: [{ status: "asc" }, { createdAt: "asc" }],
-  });
-
-  const backlogIssues = await db.issue.findMany({
-    where: { projectId: project.id, sprintId: null },
-    include: { assignee: { select: { name: true, avatarColor: true } } },
-    orderBy: { order: "asc" },
-  });
+  const [sprints, backlogIssues, sprintCount] = await Promise.all([
+    db.sprint.findMany({
+      where: { projectId: project.id, status: { in: ["ACTIVE", "PLANNED"] } },
+      include: { issues: { include: issueInclude, orderBy: { order: "asc" } } },
+      orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+    }),
+    db.issue.findMany({
+      where: { projectId: project.id, sprintId: null },
+      include: issueInclude,
+      orderBy: { order: "asc" },
+    }),
+    db.sprint.count({ where: { projectId: project.id } }),
+  ]);
 
   const sprintTargets = sprints.map((sprint) => ({ id: sprint.id, name: sprint.name }));
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Backlog</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Backlog</h1>
           <p className="text-sm text-muted-foreground">
-            Plane Sprints und verschiebe Tickets per Menü.
+            Plane Sprints und verschiebe Tickets über das Menü (···).
           </p>
         </div>
-        <CreateSprintDialog projectKey={project.key} />
+        <CreateSprintDialog projectKey={project.key} suggestedName={`Sprint ${sprintCount + 1}`} />
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {sprints.map((sprint) => (
           <BacklogSection
             key={sprint.id}
@@ -74,6 +73,8 @@ type IssueWithAssignee = {
   type: string;
   status: string;
   priority: string;
+  storyPoints: number | null;
+  dueDate: Date | null;
   assignee: { name: string; avatarColor: string } | null;
 };
 
@@ -84,6 +85,8 @@ function toIssueProps(issue: IssueWithAssignee) {
     type: issue.type,
     status: issue.status,
     priority: issue.priority,
+    storyPoints: issue.storyPoints,
+    dueDate: issue.dueDate?.toISOString() ?? null,
     assignee: issue.assignee,
   };
 }

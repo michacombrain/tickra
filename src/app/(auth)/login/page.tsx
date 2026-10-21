@@ -21,11 +21,11 @@ export default function LoginPage() {
         <form action={formAction} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">E-Mail</Label>
-            <Input id="email" name="email" type="email" placeholder="micha@firma.de" required autoFocus />
+            <Input id="email" name="email" type="email" placeholder="micha@firma.de" required autoComplete="email" autoFocus />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Passwort</Label>
-            <Input id="password" name="password" type="password" required />
+            <Input id="password" name="password" type="password" autoComplete="current-password" required />
           </div>
           {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
           <Button type="submit" className="w-full" disabled={pending}>

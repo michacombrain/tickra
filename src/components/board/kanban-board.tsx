@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -8,54 +8,92 @@ import {
   DragOverEvent,
   DragOverlay,
   DragStartEvent,
-  PointerSensor,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { moveIssueAction } from "@/lib/actions/issues";
-import { ISSUE_STATUSES, IssueStatus, STATUS_LABELS } from "@/lib/constants";
+import { ISSUE_STATUSES, ISSUE_TYPES, IssueStatus, STATUS_LABELS, TYPE_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { UserAvatar } from "@/components/user-avatar";
 import { BoardColumn } from "@/components/board/board-column";
 import { IssueCard, type BoardIssue } from "@/components/board/issue-card";
+import { useCreateIssue } from "@/components/issue/create-issue-dialog";
+
+const ALL_TYPES = "__all__";
 
 export function KanbanBoard({
   projectKey,
+  sprintId,
+  currentUserId,
   initialIssues,
   members,
 }: {
   projectKey: string;
+  sprintId: string;
+  currentUserId: string;
   initialIssues: BoardIssue[];
   members: { id: string; name: string; avatarColor: string }[];
 }) {
   const [issues, setIssues] = useState(initialIssues);
   const [activeIssue, setActiveIssue] = useState<BoardIssue | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState(ALL_TYPES);
+  const [textFilter, setTextFilter] = useState("");
   const [, startTransition] = useTransition();
+  const dragStart = useRef<{ status: string; order: number } | null>(null);
   const lastTargetStatus = useRef<IssueStatus | null>(null);
   const router = useRouter();
+  const openCreateIssue = useCreateIssue();
 
   // Server-Refreshs (z.B. nach Ticket-Edit im Modal) übernehmen –
   // aber nicht mitten in einem laufenden Drag, sonst bricht dnd-kit ab
-  const draggingRef = useRef(false);
-  draggingRef.current = activeIssue !== null;
-  useEffect(() => {
-    if (!draggingRef.current) setIssues(initialIssues);
-  }, [initialIssues]);
+  const [syncedIssues, setSyncedIssues] = useState(initialIssues);
+  if (syncedIssues !== initialIssues && !activeIssue) {
+    setSyncedIssues(initialIssues);
+    setIssues(initialIssues);
+  }
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    // Auf Touch-Geräten erst nach kurzem Halten ziehen, damit Scrollen funktioniert
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
+
+  const query = textFilter.trim().toLowerCase();
+  const filtersActive = assigneeFilter !== null || typeFilter !== ALL_TYPES || query !== "";
 
   const visibleIssues = useMemo(
     () =>
-      assigneeFilter
-        ? issues.filter((issue) => issue.assignee?.id === assigneeFilter)
-        : issues,
-    [issues, assigneeFilter]
+      issues.filter((issue) => {
+        if (assigneeFilter === "unassigned" ? issue.assignee : assigneeFilter && issue.assignee?.id !== assigneeFilter) {
+          return false;
+        }
+        if (typeFilter !== ALL_TYPES && issue.type !== typeFilter) return false;
+        if (query && !`${issue.key} ${issue.title}`.toLowerCase().includes(query)) return false;
+        return true;
+      }),
+    [issues, assigneeFilter, typeFilter, query]
   );
 
   const columns = useMemo(
@@ -80,7 +118,9 @@ export function KanbanBoard({
   }
 
   function onDragStart(event: DragStartEvent) {
-    setActiveIssue(findIssue(String(event.active.id)));
+    const issue = findIssue(String(event.active.id));
+    setActiveIssue(issue);
+    dragStart.current = issue ? { status: issue.status, order: issue.order } : null;
   }
 
   function onDragOver(event: DragOverEvent) {
@@ -99,9 +139,18 @@ export function KanbanBoard({
     );
   }
 
+  function onDragCancel() {
+    setActiveIssue(null);
+    lastTargetStatus.current = null;
+    // Optimistische Spaltenwechsel aus onDragOver zurücknehmen
+    setIssues(initialIssues);
+  }
+
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    const start = dragStart.current;
     setActiveIssue(null);
+    dragStart.current = null;
 
     const issueKey = String(active.id);
     const issue = findIssue(issueKey);
@@ -110,24 +159,35 @@ export function KanbanBoard({
       ? resolveTargetStatus(String(over.id))
       : lastTargetStatus.current;
     lastTargetStatus.current = null;
-    if (!issue || !targetStatus) {
-      if (issue) router.refresh();
+    if (!issue || !targetStatus || !start) {
+      setIssues(initialIssues);
       return;
     }
 
-    // Neue Position: zwischen Nachbarkarten in der Zielspalte einsortieren
-    const columnIssues = issues
+    // Neue Position zwischen den sichtbaren Nachbarkarten der Zielspalte
+    const others = visibleIssues
       .filter((item) => item.status === targetStatus && item.key !== issueKey)
       .sort((a, b) => a.order - b.order);
+    const overIssue = others.find((item) => item.key === String(over?.id));
 
     let newOrder: number;
-    const overIndex = columnIssues.findIndex((item) => item.key === String(over?.id));
-    if (overIndex === -1) {
-      newOrder = (columnIssues.at(-1)?.order ?? 0) + 1;
+    if (!overIssue) {
+      newOrder = (others.at(-1)?.order ?? 0) + 1;
     } else {
-      const prev = columnIssues[overIndex - 1]?.order ?? columnIssues[overIndex].order - 2;
-      newOrder = (prev + columnIssues[overIndex].order) / 2;
+      const index = others.indexOf(overIssue);
+      // Innerhalb derselben Spalte nach unten gezogen → hinter die Zielkarte
+      const placeAfter = start.status === targetStatus && start.order < overIssue.order;
+      const before = placeAfter ? overIssue : others[index - 1];
+      const after = placeAfter ? others[index + 1] : overIssue;
+      newOrder =
+        before && after
+          ? (before.order + after.order) / 2
+          : before
+            ? before.order + 1
+            : after.order - 1;
     }
+
+    if (start.status === targetStatus && start.order === newOrder) return;
 
     setIssues((current) =>
       current.map((item) =>
@@ -146,9 +206,18 @@ export function KanbanBoard({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Filter:</span>
-        <div className="flex -space-x-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={textFilter}
+            onChange={(e) => setTextFilter(e.target.value)}
+            placeholder="Board filtern…"
+            className="h-8 w-44 pl-8 text-sm"
+            aria-label="Board filtern"
+          />
+        </div>
+        <div className="flex items-center -space-x-1">
           {members.map((member) => (
             <button
               key={member.id}
@@ -156,22 +225,55 @@ export function KanbanBoard({
                 setAssigneeFilter((current) => (current === member.id ? null : member.id))
               }
               className={cn(
-                "rounded-full ring-2 ring-background transition-transform hover:-translate-y-0.5",
-                assigneeFilter === member.id && "ring-blue-600"
+                "rounded-full ring-2 ring-background transition-transform hover:z-10 hover:-translate-y-0.5",
+                assigneeFilter === member.id && "z-10 ring-foreground"
               )}
               title={member.name}
+              aria-pressed={assigneeFilter === member.id}
             >
-              <UserAvatar name={member.name} color={member.avatarColor} className="size-8" />
+              <UserAvatar name={member.name} color={member.avatarColor} />
             </button>
           ))}
         </div>
-        {assigneeFilter && (
-          <button
-            onClick={() => setAssigneeFilter(null)}
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+        <Button
+          size="sm"
+          variant={assigneeFilter === currentUserId ? "secondary" : "ghost"}
+          onClick={() => setAssigneeFilter((c) => (c === currentUserId ? null : currentUserId))}
+        >
+          Nur meine
+        </Button>
+        <Button
+          size="sm"
+          variant={assigneeFilter === "unassigned" ? "secondary" : "ghost"}
+          onClick={() => setAssigneeFilter((c) => (c === "unassigned" ? null : "unassigned"))}
+        >
+          Nicht zugewiesen
+        </Button>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger size="sm" className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_TYPES}>Alle Typen</SelectItem>
+            {ISSUE_TYPES.map((type) => (
+              <SelectItem key={type} value={type}>{TYPE_LABELS[type]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {filtersActive && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => {
+              setAssigneeFilter(null);
+              setTypeFilter(ALL_TYPES);
+              setTextFilter("");
+            }}
           >
-            Filter zurücksetzen
-          </button>
+            <XIcon />
+            Zurücksetzen
+          </Button>
         )}
       </div>
 
@@ -182,8 +284,9 @@ export function KanbanBoard({
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
+        onDragCancel={onDragCancel}
       >
-        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {columns.map((column) => (
             <SortableContext
               key={column.status}
@@ -194,6 +297,17 @@ export function KanbanBoard({
                 status={column.status}
                 label={STATUS_LABELS[column.status]}
                 count={column.issues.length}
+                footer={
+                  column.status === "TODO" && (
+                    <button
+                      onClick={() => openCreateIssue({ sprintId })}
+                      className="mt-2 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                    >
+                      <PlusIcon className="size-4" />
+                      Ticket erstellen
+                    </button>
+                  )
+                }
               >
                 {column.issues.map((issue) => (
                   <IssueCard key={issue.key} issue={issue} projectKey={projectKey} />

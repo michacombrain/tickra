@@ -68,6 +68,8 @@ model Issue {
   status      String       @default("TODO") // TODO | IN_PROGRESS | IN_REVIEW | DONE
   priority    String       @default("MEDIUM") // HIGHEST | HIGH | MEDIUM | LOW | LOWEST
   order       Float        @default(0)
+  storyPoints Int?
+  dueDate     DateTime?
   projectId   String
   sprintId    String?
   assigneeId  String?
@@ -87,6 +89,7 @@ model Comment {
   issueId   String
   authorId  String
   body      String
+  editedAt  DateTime?
   issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
