@@ -80,7 +80,7 @@ export async function IssueDetail({
       : sprints;
 
   return (
-    <div className="grid gap-8 md:grid-cols-[1fr_220px]">
+    <div className="grid gap-8 md:grid-cols-[1fr_250px]">
       <div className="min-w-0 space-y-6">
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">

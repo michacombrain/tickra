@@ -332,7 +332,7 @@ export function createTickraMcpServer(user: ApiUser) {
         note: z.string().optional(),
       }),
     },
-    async (input) => fromService(await reportLimit(user, input))
+    async (input) => fromService(await reportLimit(user, input, "MCP"))
   );
 
   return server;

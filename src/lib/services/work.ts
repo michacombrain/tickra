@@ -28,6 +28,15 @@ function findIssue(ctx: ServiceContext, issueKey: string) {
   });
 }
 
+/**
+ * Ein Agent, dem das Ticket inzwischen abgenommen wurde (Übernahme, Eingriff eines Menschen),
+ * darf nicht weiter hineinschreiben – sein Prozess soll das merken und aufhören.
+ */
+function lostClaim(ctx: ServiceContext, issue: { key: string; claimedById: string | null; claimedBy: { name: string } | null }) {
+  if (ctx.user.kind !== "AGENT" || !issue.claimedById || issue.claimedById === ctx.user.id) return null;
+  return fail(`${issue.key} wurde von ${issue.claimedBy?.name ?? "jemand anderem"} übernommen – beende die Arbeit an diesem Ticket.`, 409);
+}
+
 // ---------------------------------------------------------------------------
 // Reservieren, Lebenszeichen, Freigeben
 // ---------------------------------------------------------------------------
@@ -100,6 +109,9 @@ export async function saveCheckpoint(ctx: ServiceContext, issueKey: string, inpu
   const existing = await findIssue(ctx, issueKey);
   if (!existing) return fail(`Ticket ${issueKey} nicht gefunden.`, 404);
 
+  const lost = lostClaim(ctx, existing);
+  if (lost) return lost;
+
   const { branch, kind, ...data } = parsed.data;
   const isClaimant = existing.claimedById === ctx.user.id;
   const checkpoint = await db.$transaction(async (tx) => {
@@ -134,9 +146,11 @@ export async function submitForReview(ctx: ServiceContext, issueKey: string, inp
   const existing = await findIssue(ctx, issueKey);
   if (!existing) return fail(`Ticket ${issueKey} nicht gefunden.`, 404);
 
-  const work = workState(existing);
-  if (work.state === "RUNNING" && work.by?.id !== ctx.user.id) {
-    return fail(`${existing.key} wird gerade von ${work.by?.name} bearbeitet.`, 409);
+  const lost = lostClaim(ctx, existing);
+  if (lost) return lost;
+  if (existing.status === "DONE") return fail(`${existing.key} ist bereits freigegeben.`, 409);
+  if (ctx.user.kind === "AGENT" && existing.claimedById !== ctx.user.id && existing.assigneeId !== ctx.user.id) {
+    return fail(`${existing.key} ist dir nicht zugewiesen. Erst claim_issue aufrufen.`, 409);
   }
   const open = existing.checklist.filter((item) => !item.done);
 
@@ -300,7 +314,7 @@ const limitSchema = z.object({
  * Agent meldet: Nutzungslimit erreicht. Seine reservierten Tickets bleiben erhalten und gelten
  * als "pausiert" – bis zum Reset oder bis ein anderer Agent sie übernimmt.
  */
-export async function reportLimit(user: Actor, input: unknown) {
+export async function reportLimit(user: Actor, input: unknown, via: ServiceContext["via"] = "API") {
   const parsed = limitSchema.safeParse(input ?? {});
   if (!parsed.success) return fail(firstError(parsed.error));
   const now = Date.now();
@@ -345,7 +359,7 @@ export async function reportLimit(user: Actor, input: unknown) {
           actorId: user.id,
           action: "agent.limited",
           details: JSON.stringify({ until: until.toISOString() }),
-          via: "API",
+          via,
         },
       }),
     ]),

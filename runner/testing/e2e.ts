@@ -312,11 +312,22 @@ async function main() {
   check("der alte Bearbeiter kann die Reservierung nicht mehr verlängern", () => {
     assert.equal(heartbeatA.status, 409);
   });
+  const staleCheckpoint = await asA("POST", `/issues/${fourth}/checkpoints`, { summary: "veraltet" });
+  const staleReview = await asA("POST", `/issues/${fourth}/review`, { summary: "veraltet" });
+  check("…und weder Zwischenstände schreiben noch das Ticket abschließen", () => {
+    assert.equal(staleCheckpoint.status, 409);
+    assert.match(staleCheckpoint.data.error, /übernommen/);
+    assert.equal(staleReview.status, 409);
+  });
   await asB("POST", `/issues/${fourth}/review`, { summary: "fertig" });
   const approve = await asHuman("PATCH", `/issues/${fourth}`, { status: "DONE" });
   check("ein Mensch gibt frei", () => {
     assert.equal(approve.status, 200);
     assert.equal(approve.data.status, "DONE");
+  });
+  const lateReview = await asB("POST", `/issues/${fourth}/review`, { summary: "nochmal" });
+  check("ein freigegebenes Ticket kann kein Agent zurück in die Prüfung holen", () => {
+    assert.equal(lateReview.status, 409);
   });
   const fifth = await newIssue("Nachbessern");
   await asA("POST", `/issues/${fifth}/claim`);
@@ -326,6 +337,55 @@ async function main() {
   check("„Nachbessern“ bringt das Ticket samt Vorgeschichte zurück in die Verteilung", () => {
     assert.equal(again.task.key, fifth);
     assert.ok(again.task.checkpoints.some((c: { summary: string }) => c.summary === "erster Versuch"));
+  });
+
+  // --- 6: MCP ---------------------------------------------------------------
+  console.log("\n6) MCP-Endpunkt");
+  const mcp = async (token: string | null, method: string, params?: unknown) => {
+    const response = await fetch(`${URL}/api/mcp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2025-06-18",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    const raw = await response.text();
+    const json = raw.trimStart().startsWith("{") ? raw : (raw.split("\n").find((line) => line.startsWith("data:")) ?? "data:{}").slice(5);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { status: response.status, body: JSON.parse(json || "{}") as any };
+  };
+  const callTool = async (token: string, name: string, args: object) => {
+    const { body } = await mcp(token, "tools/call", { name, arguments: args });
+    return { isError: !!body.result?.isError, text: String(body.result?.content?.[0]?.text ?? "") };
+  };
+  const anonymous = await mcp(null, "tools/list");
+  const tools = await mcp(keys.b.token, "tools/list");
+  check("ohne Key kein Zugriff, mit Key alle Tools", () => {
+    assert.equal(anonymous.status, 401);
+    const names = tools.body.result.tools.map((tool: { name: string }) => tool.name);
+    for (const name of ["next_task", "claim_issue", "save_checkpoint", "check_item", "submit_for_review", "release_issue", "report_limit"]) {
+      assert.ok(names.includes(name), `Tool ${name} fehlt`);
+    }
+  });
+  const viaMcp = await callTool(keys.b.token, "save_checkpoint", { issue: fifth, summary: "per MCP gespeichert" });
+  const checked = await callTool(keys.b.token, "check_item", { issue: fifth, item: 1 });
+  const forbidden = await callTool(keys.b.token, "update_issue", { issue: fifth, status: "DONE" });
+  const submitted = await callTool(keys.b.token, "submit_for_review", { issue: fifth, summary: "zweiter Versuch" });
+  const viaMcpIssue = (await asHuman("GET", `/issues/${fifth}`)).data;
+  check("Agent arbeitet über MCP: Zwischenstand, Kriterium abhaken, zur Prüfung übergeben", () => {
+    assert.equal(viaMcp.isError, false, viaMcp.text);
+    assert.equal(checked.isError, false, checked.text);
+    assert.equal(submitted.isError, false, submitted.text);
+    assert.equal(viaMcpIssue.status, "IN_REVIEW");
+    assert.equal(viaMcpIssue.checklist[0].done, true);
+    assert.ok(viaMcpIssue.activity.some((entry: { via: string }) => entry.via === "MCP"));
+  });
+  check("Freigabe-Gate gilt auch über MCP", () => {
+    assert.equal(forbidden.isError, true);
+    assert.match(forbidden.text, /Nur Menschen/);
   });
 
   await prisma.$disconnect();
