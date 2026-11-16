@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "runner": "tsx runner/index.ts",
+    "test": "tsx --test runner/*.test.ts",
+    "test:e2e": "next build && tsx runner/testing/e2e.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

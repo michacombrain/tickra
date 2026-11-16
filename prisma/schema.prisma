@@ -26,6 +26,11 @@ model User {
   comments     Comment[]
   apiKeys      ApiKey[]
   activities   Activity[]
+  // Agent hat sein Nutzungslimit erreicht und kann erst danach weiterarbeiten
+  limitedUntil DateTime?
+  limitNote    String?
+  claimedIssues Issue[]        @relation("IssueClaim")
+  checkpoints  Checkpoint[]
 }
 
 /// API-Key für REST-API und MCP. Gespeichert wird nur der SHA-256-Hash.
@@ -110,6 +115,16 @@ model Issue {
   order       Float        @default(0)
   storyPoints Int?
   dueDate     DateTime?
+  // Agent-Arbeit: darf automatisch verteilt werden?
+  agentReady  Boolean      @default(false)
+  // Reservierung ("Lease"): wer arbeitet gerade daran und bis wann gilt das ohne Lebenszeichen
+  claimedById    String?
+  claimExpiresAt DateTime?
+  claimedBy      User?     @relation("IssueClaim", fields: [claimedById], references: [id], onDelete: SetNull)
+  branch      String?
+  prUrl       String?
+  checkpoints Checkpoint[]
+  checklist   ChecklistItem[]
   projectId   String
   sprintId    String?
   assigneeId  String?
@@ -154,4 +169,32 @@ model IssueLabel {
   label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
   @@id([issueId, labelId])
+}
+
+/// Zwischenstand einer Aufgabe – damit nach Limit, Absturz oder Übergabe nichts verloren geht.
+model Checkpoint {
+  id        String   @id @default(cuid())
+  issueId   String
+  authorId  String
+  kind      String   @default("PROGRESS") // PROGRESS | LIMIT | HANDOFF | RUNNER
+  summary   String // was erledigt ist / aktueller Stand
+  nextSteps String? // was als Nächstes zu tun ist
+  sessionId String? // Session des Agenten-Tools zum Fortsetzen (z.B. claude --resume)
+  createdAt DateTime @default(now())
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([issueId, createdAt])
+}
+
+/// Akzeptanzkriterium: eindeutige Definition von "fertig".
+model ChecklistItem {
+  id      String  @id @default(cuid())
+  issueId String
+  text    String
+  done    Boolean @default(false)
+  order   Int     @default(0)
+  issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId, order])
 }

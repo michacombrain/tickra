@@ -95,3 +95,51 @@ export async function describeProject(ctx: ServiceContext) {
     sprints,
   };
 }
+
+type IssueParams = { params: Promise<{ issueKey: string }> };
+
+/** Gemeinsamer Rahmen für /issues/:issueKey/…-Routen: Auth, Projektzugriff, JSON-Body. */
+export function issueRoute(
+  handler: (ctx: ServiceContext, issueKey: string, body: unknown) => Promise<ServiceResult<unknown>>,
+  options: { body?: boolean; status?: number } = {}
+) {
+  return async (request: NextRequest, { params }: IssueParams) => {
+    const user = await authenticate(request);
+    if (user instanceof NextResponse) return user;
+    const { issueKey } = await params;
+    const projectKey = projectKeyOf(issueKey);
+    const ctx = projectKey ? await contextFor(user, projectKey, "API") : null;
+    if (!ctx) return apiError(`Ticket ${issueKey} nicht gefunden.`, 404);
+
+    let body: unknown = undefined;
+    if (options.body) {
+      body = await readJson(request);
+      if (body === INVALID_JSON) return invalidJsonResponse();
+    }
+    return toResponse(await handler(ctx, issueKey, body), options.status);
+  };
+}
+
+/** Rahmen für /agent/…-Routen, die am User statt an einem Projekt hängen. */
+export function userRoute(
+  handler: (user: ApiUser, body: unknown) => Promise<ServiceResult<unknown>>,
+  options: { body?: boolean } = {}
+) {
+  return async (request: NextRequest) => {
+    const user = await authenticate(request);
+    if (user instanceof NextResponse) return user;
+    let body: unknown = undefined;
+    if (options.body) {
+      // Leerer Body ist erlaubt (alle Felder optional)
+      const text = await request.text();
+      if (text.trim()) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          return invalidJsonResponse();
+        }
+      }
+    }
+    return toResponse(await handler(user, body));
+  };
+}

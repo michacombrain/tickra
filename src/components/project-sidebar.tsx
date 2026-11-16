@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { KanbanSquareIcon, ListTodoIcon, PlusIcon, SettingsIcon } from "lucide-react";
+import { BotIcon, KanbanSquareIcon, ListTodoIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useCreateIssue } from "@/components/issue/create-issue-dialog";
@@ -11,6 +11,7 @@ function projectLinks(projectKey: string) {
   return [
     { href: `/projects/${projectKey}/board`, label: "Board", icon: KanbanSquareIcon },
     { href: `/projects/${projectKey}/backlog`, label: "Backlog", icon: ListTodoIcon },
+    { href: `/projects/${projectKey}/agents`, label: "Agenten", icon: BotIcon },
     { href: `/projects/${projectKey}/settings`, label: "Einstellungen", icon: SettingsIcon },
   ];
 }

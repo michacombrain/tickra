@@ -43,3 +43,7 @@ next-env.d.ts
 # Datenbank & generierter Prisma-Client
 prisma/dev.db*
 src/generated/
+
+# Tickra-Runner: lokale Konfiguration (enthält ggf. API-Keys) und Zustand
+runner.config.json
+.tickra-runner-state.json

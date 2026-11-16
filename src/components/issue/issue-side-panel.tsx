@@ -2,7 +2,7 @@
 
 import { useOptimistic, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2Icon } from "lucide-react";
+import { BotIcon, ExternalLinkIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import {
   deleteIssueAction,
@@ -44,6 +44,9 @@ type Fields = {
   sprintId: string | null;
   storyPoints: number | null;
   dueDate: string;
+  agentReady: boolean;
+  branch: string;
+  prUrl: string;
 };
 
 export function IssueSidePanel({
@@ -231,6 +234,61 @@ export function IssueSidePanel({
           </SelectContent>
         </Select>
       </Field>
+
+      <div className="space-y-3 border-t pt-4">
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            checked={optimistic.agentReady}
+            onChange={(e) => update({ agentReady: e.target.checked })}
+            className="mt-0.5 size-4 shrink-0 cursor-pointer accent-foreground"
+          />
+          <span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <BotIcon className="size-3.5" />
+              Für Agenten freigeben
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Wird automatisch an einen freien KI-Agenten verteilt.
+            </span>
+          </span>
+        </label>
+
+        <Field label="Branch">
+          <Input
+            key={fields.branch}
+            defaultValue={fields.branch}
+            placeholder="z.B. tickra/WEB-12"
+            maxLength={200}
+            className="h-7 px-2 font-mono text-xs"
+            onBlur={(e) => e.target.value.trim() !== fields.branch && update({ branch: e.target.value.trim() })}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          />
+        </Field>
+
+        <Field label="Pull Request">
+          <Input
+            key={fields.prUrl}
+            defaultValue={fields.prUrl}
+            placeholder="https://github.com/…/pull/1"
+            maxLength={500}
+            className="h-7 px-2 text-xs"
+            onBlur={(e) => e.target.value.trim() !== fields.prUrl && update({ prUrl: e.target.value.trim() })}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          />
+          {fields.prUrl && (
+            <a
+              href={fields.prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              <ExternalLinkIcon className="size-3" />
+              Öffnen
+            </a>
+          )}
+        </Field>
+      </div>
 
       <Field label="Labels">
         <div className="flex flex-wrap gap-1.5">

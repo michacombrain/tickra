@@ -7,6 +7,8 @@ import { IssuePriority, IssueType } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { DueDate, LabelBadge, PriorityIcon, StoryPoints, TypeIcon } from "@/components/issue-badges";
 import { UserAvatar } from "@/components/user-avatar";
+import { WorkIcon } from "@/components/issue/work-status";
+import type { WorkState } from "@/lib/services/claim";
 
 export type BoardIssue = {
   key: string;
@@ -17,6 +19,8 @@ export type BoardIssue = {
   order: number;
   storyPoints: number | null;
   dueDate: string | null;
+  agentReady: boolean;
+  work: { state: WorkState; by: { name: string; kind: string } | null; until: string | null };
   assignee: { id: string; name: string; avatarColor: string; kind: string } | null;
   labels: { name: string; color: string }[];
 };
@@ -69,6 +73,7 @@ export function IssueCard({
         <span className="font-mono text-[11px] text-muted-foreground">{issue.key}</span>
         <DueDate date={issue.dueDate} done={done} />
         <div className="ml-auto flex items-center gap-1.5">
+          <WorkIcon work={issue.work} queued={issue.agentReady && issue.status === "TODO"} />
           <StoryPoints points={issue.storyPoints} />
           <PriorityIcon priority={issue.priority as IssuePriority} className="size-3.5" />
           {issue.assignee ? (

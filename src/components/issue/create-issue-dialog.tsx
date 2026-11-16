@@ -87,7 +87,7 @@ export function CreateIssueProvider({
     <CreateIssueContext.Provider value={openDialog}>
       {children}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Ticket erstellen</DialogTitle>
             <DialogDescription>
@@ -135,6 +135,10 @@ function CreateIssueForm({
     if (!title) return;
     const description = String(formData.get("description") ?? "").trim();
     const dueDate = String(formData.get("dueDate") ?? "");
+    const checklist = String(formData.get("checklist") ?? "")
+      .split("\n")
+      .map((line) => line.replace(/^\s*[-*•]\s*/, "").trim())
+      .filter(Boolean);
 
     startTransition(async () => {
       const result = await createIssueAction(projectKey, {
@@ -146,6 +150,8 @@ function CreateIssueForm({
         sprintId: sprintId === NONE ? null : sprintId,
         storyPoints: storyPoints === NONE ? null : Number(storyPoints),
         dueDate: dueDate || null,
+        agentReady: formData.get("agentReady") === "on",
+        ...(checklist.length ? { checklist } : {}),
       });
       if (result.error) {
         toast.error(result.error);
@@ -208,6 +214,19 @@ function CreateIssueForm({
           <Input id="issue-due" name="dueDate" type="date" className="h-8" />
         </div>
       </div>
+      <div className="space-y-2">
+        <Label htmlFor="issue-checklist">Akzeptanzkriterien</Label>
+        <Textarea
+          id="issue-checklist"
+          name="checklist"
+          rows={2}
+          placeholder="Eine Bedingung pro Zeile – woran erkennt man, dass es fertig ist?"
+        />
+      </div>
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input type="checkbox" name="agentReady" className="size-4 cursor-pointer accent-foreground" />
+        Für KI-Agenten freigeben (wird automatisch verteilt)
+      </label>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone}>
           Abbrechen

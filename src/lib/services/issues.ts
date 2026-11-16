@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES, ISSUE_TYPES } from "@/lib/constants";
 import { toDateInput } from "@/lib/format";
 import { logActivity, type ActivityChange } from "@/lib/services/activity";
+import { claimedBySelect, workState } from "@/lib/services/claim";
 import {
   fail,
   ok,
@@ -35,10 +36,22 @@ const issueFieldsSchema = z.object({
   dueDate: dueDateSchema,
   // Label-Namen; ersetzt die bisherigen Labels
   labels: z.array(z.string().trim().min(1)).max(20),
+  // Darf automatisch an Agenten verteilt werden
+  agentReady: z.boolean(),
+  branch: z.string().trim().max(200).nullable().transform((v) => v || null),
+  prUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .regex(/^https?:\/\/\S+$/, "PR-Link muss mit http(s):// beginnen.")
+    .nullable()
+    .or(z.literal("").transform(() => null)),
+  // Akzeptanzkriterien – nur beim Anlegen
+  checklist: z.array(z.string().trim().min(1).max(300)).max(30),
 });
 
 export const createIssueSchema = issueFieldsSchema.partial().required({ title: true });
-export const updateIssueSchema = issueFieldsSchema.partial();
+export const updateIssueSchema = issueFieldsSchema.omit({ checklist: true }).partial();
 
 export type CreateIssueInput = z.input<typeof createIssueSchema>;
 export type UpdateIssueInput = z.input<typeof updateIssueSchema>;
@@ -108,12 +121,19 @@ type ResolvedFields = {
   storyPoints?: number | null;
   dueDate?: Date | null;
   labelIds?: string[];
+  agentReady?: boolean;
+  branch?: string | null;
+  prUrl?: string | null;
 };
 
 async function resolveFields(
   ctx: ServiceContext,
   data: z.output<typeof updateIssueSchema>
 ): Promise<ServiceResult<ResolvedFields>> {
+  // Agenten dürfen sich Arbeit nicht selbst freigeben – das entscheidet ein Mensch
+  if (data.agentReady !== undefined && ctx.user.kind === "AGENT") {
+    return fail("Nur Menschen können Tickets für Agenten freigeben.", 403);
+  }
   const { assignee, sprint, labels, ...rest } = data;
   const fields: ResolvedFields = { ...rest };
 
@@ -144,6 +164,8 @@ export const issueInclude = {
   reporter: { select: { id: true, name: true, email: true, avatarColor: true, kind: true } },
   sprint: { select: { id: true, name: true, status: true } },
   labels: { include: { label: { select: { id: true, name: true, color: true } } } },
+  claimedBy: claimedBySelect,
+  checklist: { orderBy: { order: "asc" } },
 } as const;
 
 type IssueRecord = NonNullable<Awaited<ReturnType<typeof findIssue>>>;
@@ -153,6 +175,11 @@ function findIssue(ctx: ServiceContext, issueKey: string) {
     where: { key: issueKey.toUpperCase(), projectId: ctx.project.id },
     include: issueInclude,
   });
+}
+
+export function serializeWork(issue: Parameters<typeof workState>[0]) {
+  const work = workState(issue);
+  return { state: work.state, by: work.by, until: work.until?.toISOString() ?? null };
 }
 
 /** Einheitliche Darstellung für API und MCP. */
@@ -172,6 +199,11 @@ export function serializeIssue(issue: IssueRecord) {
     reporter: person(issue.reporter),
     sprint: issue.sprint,
     labels: issue.labels.map((entry) => entry.label.name),
+    agentReady: issue.agentReady,
+    branch: issue.branch,
+    prUrl: issue.prUrl,
+    work: serializeWork(issue),
+    checklist: issue.checklist.map((item) => ({ id: item.id, text: item.text, done: item.done })),
     createdAt: issue.createdAt.toISOString(),
     updatedAt: issue.updatedAt.toISOString(),
   };
@@ -264,11 +296,25 @@ export async function getIssue(ctx: ServiceContext, issueKey: string) {
         orderBy: { createdAt: "desc" },
         take: 50,
       },
+      checkpoints: {
+        include: { author: { select: { id: true, name: true, kind: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      },
     },
   });
   if (!issue) return fail(`Ticket ${issueKey} nicht gefunden.`, 404);
   return ok({
     ...serializeIssue(issue),
+    // Neuester Zwischenstand zuerst – hier steht, wo die Arbeit weitergeht
+    checkpoints: issue.checkpoints.map((checkpoint) => ({
+      kind: checkpoint.kind,
+      author: checkpoint.author,
+      summary: checkpoint.summary,
+      nextSteps: checkpoint.nextSteps,
+      sessionId: checkpoint.sessionId,
+      createdAt: checkpoint.createdAt.toISOString(),
+    })),
     comments: issue.comments.map((comment) => ({
       id: comment.id,
       author: comment.author,
@@ -302,9 +348,12 @@ export async function createIssue(
   const parsed = createIssueSchema.safeParse(input);
   if (!parsed.success) return fail(firstError(parsed.error));
 
-  const resolved = await resolveFields(ctx, parsed.data);
+  const { checklist: _checklist, ...createFields } = parsed.data;
+  void _checklist;
+  const resolved = await resolveFields(ctx, createFields);
   if (!resolved.ok) return resolved;
   const { labelIds, ...fields } = resolved.data;
+  const checklist = parsed.data.checklist ?? [];
   const order = await nextOrder(ctx.project.id);
 
   const issue = await db.$transaction(async (tx) => {
@@ -321,6 +370,9 @@ export async function createIssue(
         projectId: ctx.project.id,
         reporterId: ctx.user.id,
         labels: labelIds?.length ? { create: labelIds.map((labelId) => ({ labelId })) } : undefined,
+        checklist: checklist.length
+          ? { create: checklist.map((text, index) => ({ text, order: index })) }
+          : undefined,
       },
       include: issueInclude,
     });
@@ -342,6 +394,9 @@ const TRACKED_FIELDS = [
   "sprintId",
   "storyPoints",
   "dueDate",
+  "agentReady",
+  "branch",
+  "prUrl",
 ] as const;
 
 function displayValue(field: string, value: unknown, ctx: ServiceContext, sprintNames: Map<string, string>) {
@@ -351,6 +406,15 @@ function displayValue(field: string, value: unknown, ctx: ServiceContext, sprint
   if (value instanceof Date) return toDateInput(value);
   if (field === "description") return String(value).length > 80 ? `${String(value).slice(0, 80)}…` : value;
   return value;
+}
+
+function releasesClaim(
+  existing: { claimedById: string | null; assigneeId: string | null },
+  data: Record<string, unknown>
+) {
+  const statusLeft = "status" in data && data.status !== "IN_PROGRESS";
+  const reassigned = "assigneeId" in data && data.assigneeId !== existing.claimedById;
+  return statusLeft || reassigned;
 }
 
 export async function updateIssue(
@@ -367,6 +431,15 @@ export async function updateIssue(
   const resolved = await resolveFields(ctx, parsed.data);
   if (!resolved.ok) return resolved;
   const { labelIds, ...fields } = resolved.data;
+
+  const isAgent = ctx.user.kind === "AGENT";
+  const work = workState(existing);
+  if (isAgent && fields.status === "DONE" && existing.status !== "DONE") {
+    return fail('Nur Menschen geben Tickets frei. Nutze submit_for_review bzw. status "IN_REVIEW".', 403);
+  }
+  if (isAgent && work.state === "RUNNING" && work.by?.id !== ctx.user.id) {
+    return fail(`${existing.key} wird gerade von ${work.by?.name} bearbeitet.`, 409);
+  }
 
   // Nur echte Änderungen speichern und protokollieren
   const changes: ActivityChange[] = [];
@@ -394,6 +467,11 @@ export async function updateIssue(
   }
   // In anderen Sprint/Backlog verschoben → ans Ende der Liste
   if ("sprintId" in data) data.order = await nextOrder(ctx.project.id);
+  // Reservierung endet, wenn das Ticket weitergegeben oder aus "In Arbeit" genommen wird
+  if (existing.claimedById && releasesClaim(existing, data)) {
+    data.claimedById = null;
+    data.claimExpiresAt = null;
+  }
 
   const prevLabelIds = existing.labels.map((entry) => entry.label.id);
   const labelsChanged =
@@ -435,8 +513,16 @@ export async function moveIssue(
   const existing = await findIssue(ctx, issueKey);
   if (!existing) return fail(`Ticket ${issueKey} nicht gefunden.`, 404);
 
+  if (ctx.user.kind === "AGENT" && parsed.data.status === "DONE" && existing.status !== "DONE") {
+    return fail("Nur Menschen geben Tickets frei.", 403);
+  }
+  const release = existing.claimedById && parsed.data.status !== "IN_PROGRESS";
+
   await db.$transaction(async (tx) => {
-    await tx.issue.update({ where: { id: existing.id }, data: parsed.data });
+    await tx.issue.update({
+      where: { id: existing.id },
+      data: { ...parsed.data, ...(release ? { claimedById: null, claimExpiresAt: null } : {}) },
+    });
     if (existing.status !== parsed.data.status) {
       await logActivity(
         ctx,

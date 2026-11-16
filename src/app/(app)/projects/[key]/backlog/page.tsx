@@ -1,9 +1,14 @@
 import { requireProjectAccess } from "@/lib/access";
 import { db } from "@/lib/db";
+import { claimedBySelect } from "@/lib/services/claim";
+import { serializeWork } from "@/lib/services/issues";
 import { BacklogSection } from "@/components/backlog/backlog-section";
 import { CreateSprintDialog } from "@/components/backlog/create-sprint-dialog";
 
-const issueInclude = { assignee: { select: { name: true, avatarColor: true, kind: true } } } as const;
+const issueInclude = {
+  assignee: { select: { name: true, avatarColor: true, kind: true } },
+  claimedBy: claimedBySelect,
+} as const;
 
 export default async function BacklogPage({
   params,
@@ -76,7 +81,8 @@ type IssueWithAssignee = {
   storyPoints: number | null;
   dueDate: Date | null;
   assignee: { name: string; avatarColor: string; kind: string } | null;
-};
+  agentReady: boolean;
+} & Parameters<typeof serializeWork>[0];
 
 function toIssueProps(issue: IssueWithAssignee) {
   return {
@@ -88,5 +94,7 @@ function toIssueProps(issue: IssueWithAssignee) {
     storyPoints: issue.storyPoints,
     dueDate: issue.dueDate?.toISOString() ?? null,
     assignee: issue.assignee,
+    agentReady: issue.agentReady,
+    work: serializeWork(issue),
   };
 }

@@ -41,6 +41,8 @@ import {
 import { DueDate, PriorityIcon, StatusBadge, StoryPoints, TypeIcon } from "@/components/issue-badges";
 import { UserAvatar } from "@/components/user-avatar";
 import { EditSprintDialog } from "@/components/backlog/create-sprint-dialog";
+import { WorkIcon } from "@/components/issue/work-status";
+import type { WorkState } from "@/lib/services/claim";
 
 type IssueItem = {
   key: string;
@@ -51,6 +53,8 @@ type IssueItem = {
   storyPoints: number | null;
   dueDate: string | null;
   assignee: { name: string; avatarColor: string; kind: string } | null;
+  agentReady: boolean;
+  work: { state: WorkState; by: { name: string; kind: string } | null; until: string | null };
 };
 
 type SprintInfo = { id: string; name: string; goal: string | null; status: string };
@@ -198,6 +202,7 @@ export function BacklogSection({
                 <DueDate date={issue.dueDate} done={issue.status === "DONE"} />
                 <StatusBadge status={issue.status as IssueStatus} />
               </span>
+              <WorkIcon work={issue.work} queued={issue.agentReady && issue.status === "TODO"} />
               <StoryPoints points={issue.storyPoints} />
               <PriorityIcon priority={issue.priority as IssuePriority} className="size-3.5" />
               {issue.assignee ? (

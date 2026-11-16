@@ -1,0 +1,18 @@
+{
+  "url": "http://localhost:3000",
+  "pollSeconds": 20,
+  "onLimit": "handoff",
+  "defaultLimitMinutes": 60,
+  "maxAttempts": 3,
+  "projects": {
+    "WEB": { "path": "~/Projekte/meine-website" }
+  },
+  "agents": [
+    { "name": "Claude A", "apiKeyEnv": "TICKRA_KEY_A" },
+    {
+      "name": "Claude B",
+      "apiKeyEnv": "TICKRA_KEY_B",
+      "env": { "CLAUDE_CONFIG_DIR": "~/.claude-account-b" }
+    }
+  ]
+}
