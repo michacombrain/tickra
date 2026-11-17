@@ -12,6 +12,11 @@ import { IssueTextEditors } from "@/components/issue/issue-text-editors";
 import { CommentForm } from "@/components/issue/comment-form";
 import { CommentItem } from "@/components/issue/comment-item";
 import { ActivityList } from "@/components/issue/activity-list";
+import { Checklist } from "@/components/issue/checklist";
+import { CheckpointList } from "@/components/issue/checkpoint-list";
+import { ClearClaimButton } from "@/components/issue/clear-claim-button";
+import { WorkBanner } from "@/components/issue/work-status";
+import { claimedBySelect, workState } from "@/lib/services/claim";
 
 export async function IssueDetail({
   projectKey,
@@ -32,6 +37,13 @@ export async function IssueDetail({
         reporter: { select: { name: true, avatarColor: true, kind: true } },
         sprint: { select: { id: true, name: true, status: true } },
         labels: { select: { labelId: true } },
+        claimedBy: claimedBySelect,
+        checklist: { orderBy: { order: "asc" } },
+        checkpoints: {
+          include: { author: { select: { name: true, avatarColor: true, kind: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        },
         comments: {
           include: { author: { select: { id: true, name: true, avatarColor: true, kind: true } } },
           orderBy: { createdAt: "asc" },
@@ -59,6 +71,8 @@ export async function IssueDetail({
     kind: member.user.kind,
   }));
 
+  const work = workState(issue);
+
   // Abgeschlossener Sprint des Tickets soll trotzdem angezeigt werden
   const sprintOptions =
     issue.sprint && !sprints.some((sprint) => sprint.id === issue.sprint!.id)
@@ -66,7 +80,7 @@ export async function IssueDetail({
       : sprints;
 
   return (
-    <div className="grid gap-8 md:grid-cols-[1fr_220px]">
+    <div className="grid gap-8 md:grid-cols-[1fr_250px]">
       <div className="min-w-0 space-y-6">
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -94,6 +108,18 @@ export async function IssueDetail({
             description={issue.description}
           />
         </div>
+
+        <WorkBanner work={work}>
+          <ClearClaimButton projectKey={projectKey} issueKey={issue.key} />
+        </WorkBanner>
+
+        <Checklist
+          projectKey={projectKey}
+          issueKey={issue.key}
+          items={issue.checklist.map((item) => ({ id: item.id, text: item.text, done: item.done }))}
+        />
+
+        <CheckpointList checkpoints={issue.checkpoints} />
 
         <Separator />
 
@@ -142,6 +168,9 @@ export async function IssueDetail({
         sprintId={issue.sprint?.id ?? null}
         storyPoints={issue.storyPoints}
         dueDate={toDateInput(issue.dueDate)}
+        agentReady={issue.agentReady}
+        branch={issue.branch ?? ""}
+        prUrl={issue.prUrl ?? ""}
         members={members}
         sprints={sprintOptions}
         labels={project.labels.map((label) => ({

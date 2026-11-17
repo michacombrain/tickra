@@ -85,6 +85,9 @@ async function main() {
     labels?: string[];
     storyPoints?: number;
     dueInDays?: number;
+    // Für KI-Agenten freigegeben + Akzeptanzkriterien
+    agentReady?: boolean;
+    checklist?: string[];
   };
 
   const issues: SeedIssue[] = [
@@ -99,8 +102,8 @@ async function main() {
     { title: "Warenkorb-Funktionalität", storyPoints: 8, type: "STORY", status: "TODO", priority: "HIGHEST", sprintId: sprint2.id, assigneeId: null, description: "Als Kunde möchte ich Produkte in den Warenkorb legen können.", labels: ["Frontend", "Backend"] },
     { title: "Checkout mit Stripe", storyPoints: 13, type: "STORY", status: "TODO", priority: "HIGH", sprintId: sprint2.id, assigneeId: null, labels: ["Backend"] },
     { title: "Produktdetailseite designen", storyPoints: 5, type: "TASK", status: "TODO", priority: "MEDIUM", sprintId: sprint2.id, assigneeId: anna.id, labels: ["Design"] },
-    { title: "Newsletter-Anmeldung im Footer", type: "TASK", status: "TODO", priority: "LOWEST", sprintId: null, assigneeId: null },
-    { title: "Bug: Umlaute in URLs falsch kodiert", type: "BUG", status: "TODO", priority: "MEDIUM", sprintId: null, assigneeId: null, labels: ["Backend"] },
+    { title: "Newsletter-Anmeldung im Footer", agentReady: true, checklist: ["E-Mail-Feld mit Validierung im Footer", "Erfolgsmeldung nach dem Absenden", "Doppelte Anmeldungen werden abgefangen"], type: "TASK", status: "TODO", priority: "LOWEST", sprintId: null, assigneeId: null },
+    { title: "Bug: Umlaute in URLs falsch kodiert", agentReady: true, checklist: ["Test, der den Fehler reproduziert", "ä, ö, ü und ß werden korrekt kodiert"], type: "BUG", status: "TODO", priority: "MEDIUM", sprintId: null, assigneeId: null, labels: ["Backend"] },
     { title: "Dark Mode unterstützen", type: "STORY", status: "TODO", priority: "LOW", sprintId: null, assigneeId: null, labels: ["Frontend", "Design"] },
     { title: "Performance: Bilder auf WebP umstellen", type: "TASK", status: "TODO", priority: "LOW", sprintId: null, assigneeId: null },
     { title: "CMS-Migration: Inhalte übertragen", type: "EPIC", status: "TODO", priority: "HIGH", sprintId: null, assigneeId: null, description: "Alle Inhalte aus dem alten CMS in das neue System übertragen." },
@@ -122,6 +125,10 @@ async function main() {
         sprintId: issue.sprintId,
         assigneeId: issue.assigneeId,
         reporterId: micha.id,
+        agentReady: issue.agentReady ?? false,
+        checklist: issue.checklist
+          ? { create: issue.checklist.map((text, index) => ({ text, order: index })) }
+          : undefined,
         storyPoints: issue.storyPoints ?? null,
         dueDate:
           issue.dueInDays !== undefined

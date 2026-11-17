@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireProjectAccess } from "@/lib/access";
 import { db } from "@/lib/db";
 import { daysUntil, shortDateFormat } from "@/lib/format";
+import { claimedBySelect } from "@/lib/services/claim";
+import { serializeWork } from "@/lib/services/issues";
 import { Button } from "@/components/ui/button";
 import { KanbanBoard } from "@/components/board/kanban-board";
 import { CompleteSprintButton } from "@/components/board/complete-sprint-button";
@@ -21,6 +23,7 @@ export default async function BoardPage({
         include: {
           assignee: { select: { id: true, name: true, avatarColor: true, kind: true } },
           labels: { include: { label: true } },
+          claimedBy: claimedBySelect,
         },
         orderBy: { order: "asc" },
       },
@@ -57,6 +60,8 @@ export default async function BoardPage({
     order: issue.order,
     storyPoints: issue.storyPoints,
     dueDate: issue.dueDate?.toISOString() ?? null,
+    agentReady: issue.agentReady,
+    work: serializeWork(issue),
     assignee: issue.assignee,
     labels: issue.labels.map((entry) => ({ name: entry.label.name, color: entry.label.color })),
   }));
